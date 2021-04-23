@@ -1,0 +1,139 @@
+#include<Wire.h>
+#include<LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd (0x20, 16, 2);   //0x27
+#include <Bounce2.h>
+#define BUTTON_PIN 22
+#define LED_PIN 24
+#define LED_PIN2 26
+int ledState = LOW;
+// Constants
+const int coinpin = 19;
+
+// Variables
+volatile int pulse = 0;
+volatile unsigned long timelastPulse = 0;
+
+boolean bInserted = false;
+int credits = 0;
+int  price  = 5;
+int i = 0;
+int c = 0;
+float d = 0;
+
+Bounce debouncer = Bounce(); // สร้าง debouncer object
+void setup() {
+  // กำหนดให้ debouncer object ใช้ BUTTON_PIN ในโหมด INPUT_PULLUP (จะแก้เป็น INPUT, INPUT_PULLUP หรือ OUTPUT ก็ได้ขึ้นอยู่กับการต่อวงจร)
+  debouncer.attach(BUTTON_PIN, INPUT_PULLUP);
+  debouncer.interval(25); // กำหนดเวลาการเปลี่ยนสถานะให้กับ debouncer object ที่ 25 มิลลิวินาที
+  Serial.begin(9600);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(LED_PIN2, OUTPUT);
+  digitalWrite(LED_PIN, ledState);
+  digitalWrite(LED_PIN2,LOW);
+  lcd.init();                      // initialize the lcd
+//  lcd.backlight();
+  lcd.setCursor(0, 0);
+
+
+  attachInterrupt(digitalPinToInterrupt(coinpin), coinInterrupt, RISING);
+
+
+  displayCredit();
+
+}
+void loop() {
+
+  unsigned long  lastTime = millis() - timelastPulse;
+  if ( (pulse > 0 ) && ( lastTime > 200)  ) { // for show LED ON when Inserted
+    bInserted = false;
+    credits +=  pulse;
+    pulse = 0;
+    displayCredit();
+  }
+  if ( credits >= price ) {
+    debouncer.update(); // อัปเดตสถานะให้กับ debouncer object
+    lcd.setCursor(0, 0);
+    lcd.print("Credit:");
+    digitalWrite(LED_PIN2,HIGH);
+    // กำหนดเงื่อนไขให้โค้ดโปรแกรมในวงเล็บปีกกาทำงานเมื่อสถานะปุ่มกดเปลี่ยนจาก HIGH เป็น LOW โดยเช็คจากฟังก์ชั่น fell()
+    // หากต้องการเช็คสถานะจาก LOW เป็น HIGH ให้แทนที่ฟังก์ชั่น fell() ด้วยฟังก์ชั่น rose()
+    if ( debouncer.fell() ) {
+      ledState = !ledState; // สลับสถานะติด/ดับของ LED
+      digitalWrite(LED_PIN, ledState); // สั่งให้ LED ติด หรือดับ
+      i = !i;
+
+      lcddisplay();
+    }
+    d = credits - (c * 0.01);
+    c = c + i;
+
+    delay (100);
+    lcd.clear();
+    lcd.setCursor(0, 1);
+    lcd.print(d);
+    Serial.println(d) ;
+    if (c > (credits * 100)) {
+      c = 0;
+      i = 0;
+      credits = 0;
+
+      ledState = !ledState; // สลับสถานะติด/ดับของ LED
+      digitalWrite(LED_PIN, ledState); // สั่งให้ LED ติด หรือดับ
+      digitalWrite(LED_PIN2,LOW);
+      lcddisplay();
+    }
+  }
+}
+void lcddisplay() {
+
+  if (i == 0) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Credit:");
+    lcd.setCursor(5, 1);
+    lcd.print("Stop"); 
+    lcd.setCursor(0, 1); 
+    lcd.print(d); 
+    delay (1000);
+  }
+  if (i == 1) {
+    lcd.clear();
+    lcd.setCursor(0, 0); 
+    lcd.print("Credit:");
+    lcd.setCursor(5, 1); 
+    lcd.print("Start"); 
+    lcd.setCursor(0, 1);
+    lcd.print(d); 
+    delay (1000);
+  }
+  if (i == 0 && c == 0) {
+    lcd.clear();
+    lcd.setCursor(0, 0); 
+    lcd.print("Credit:"); 
+    lcd.setCursor(0, 1); 
+    lcd.print(d);
+  }
+
+}
+
+// Interrupt
+
+void coinInterrupt() {
+  // Each time a pulse is sent from the coin acceptor,
+  // interrupt main loop to add 1  and flip on the LED
+
+  pulse++ ;
+  timelastPulse = millis();
+
+}
+
+void displayCredit()
+
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Credit:");
+  lcd.setCursor(0, 1);
+  lcd.print( credits );
+
+}
